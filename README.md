@@ -1,2 +1,6 @@
 # puha
-This is a cli tool to help me keep track of the things I own.
+
+This workspace contains:
+
+- **puha-lib**: a library providing puha's core functionality.
+- **puha**: the command-line interface that wraps the library.
