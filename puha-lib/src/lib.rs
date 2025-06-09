@@ -160,6 +160,36 @@ impl Space {
         self.spaces.push(space);
     }
 
+    /// Get a mutable reference to an item by name in this space only.
+    pub fn find_item_mut(&mut self, name: &str) -> Option<&mut Item> {
+        self.items.iter_mut().find(|i| i.name == name)
+    }
+
+    /// Remove an item only from this space, not searching children.
+    pub fn remove_item_local(&mut self, name: &str) -> Option<Item> {
+        if let Some(pos) = self.items.iter().position(|i| i.name == name) {
+            return Some(self.items.remove(pos));
+        }
+        None
+    }
+
+    /// Remove a direct child space by name.
+    pub fn remove_direct_space(&mut self, name: &str) -> Option<Space> {
+        if let Some(pos) = self.spaces.iter().position(|s| s.name == name) {
+            return Some(self.spaces.remove(pos));
+        }
+        None
+    }
+
+    /// Collect all items from this space and its descendants, consuming it.
+    pub fn collect_items(self) -> Vec<Item> {
+        let mut items = self.items;
+        for space in self.spaces {
+            items.extend(space.collect_items());
+        }
+        items
+    }
+
     /// Recursively search for a space and return a mutable reference if found.
     pub fn find_space_mut<'a>(&'a mut self, name: &str) -> Option<&'a mut Space> {
         if self.name == name {
@@ -285,5 +315,22 @@ mod tests {
 
         let loaded = Space::from_file(file.path()).unwrap();
         assert_eq!(loaded, root);
+    }
+
+    #[test]
+    fn collect_items_from_nested_space() {
+        let item1 = Item::builder().name("i1").description("").build();
+        let item2 = Item::builder().name("i2").description("").build();
+        let child = Space::builder().name("child").push_item(item2.clone()).build();
+        let parent = Space::builder()
+            .name("parent")
+            .push_item(item1.clone())
+            .push_space(child)
+            .build();
+
+        let items = parent.collect_items();
+        assert_eq!(items.len(), 2);
+        assert!(items.contains(&item1));
+        assert!(items.contains(&item2));
     }
 }
