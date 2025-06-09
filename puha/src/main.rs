@@ -49,6 +49,25 @@ enum Commands {
 
     /// Move a space and all its children to another space
     MoveSpace { space: String, to: String },
+
+    /// Edit an item's name and/or description
+    EditItem {
+        space: String,
+        item: String,
+        #[arg(long)]
+        name: Option<String>,
+        #[arg(long)]
+        description: Option<String>,
+    },
+
+    /// Rename a space
+    EditSpace { space: String, new_name: String },
+
+    /// Delete an item from a space
+    DeleteItem { space: String, item: String },
+
+    /// Delete a child space and move its items to the parent
+    DeleteSpace { parent: String, space: String },
 }
 
 fn print_tree(space: &Space, indent: usize) {
@@ -146,6 +165,59 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .find_space_mut(&to)
                 .ok_or("destination space not found")?;
             dest.add_space(moved);
+            root.save_to_file(cli.file)?;
+        }
+        Commands::EditItem {
+            space,
+            item,
+            name,
+            description,
+        } => {
+            let mut root = Space::from_file(&cli.file)?;
+            let target = root
+                .find_space_mut(&space)
+                .ok_or("space not found")?;
+            let itm = target
+                .find_item_mut(&item)
+                .ok_or("item not found")?;
+            if let Some(n) = name {
+                itm.set_name(n);
+            }
+            if let Some(d) = description {
+                itm.set_description(d);
+            }
+            root.save_to_file(cli.file)?;
+        }
+        Commands::EditSpace { space, new_name } => {
+            let mut root = Space::from_file(&cli.file)?;
+            let target = root
+                .find_space_mut(&space)
+                .ok_or("space not found")?;
+            target.set_name(new_name);
+            root.save_to_file(cli.file)?;
+        }
+        Commands::DeleteItem { space, item } => {
+            let mut root = Space::from_file(&cli.file)?;
+            let target = root
+                .find_space_mut(&space)
+                .ok_or("space not found")?;
+            target
+                .remove_item_local(&item)
+                .ok_or("item not found")?;
+            root.save_to_file(cli.file)?;
+        }
+        Commands::DeleteSpace { parent, space } => {
+            let mut root = Space::from_file(&cli.file)?;
+            let parent_space = root
+                .find_space_mut(&parent)
+                .ok_or("parent space not found")?;
+            let removed = parent_space
+                .remove_direct_space(&space)
+                .ok_or("space not found")?;
+            let items = removed.collect_items();
+            for item in items {
+                parent_space.add_item(item);
+            }
             root.save_to_file(cli.file)?;
         }
     }
