@@ -1,9 +1,11 @@
+use serde::{Deserialize, Serialize};
+
 /// Returns a greeting string from `puha-lib`.
 pub fn greet() -> &'static str {
     "Hello from puha-lib!"
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Item {
     name: String,
     description: String,
@@ -60,7 +62,7 @@ impl Item {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Space {
     name: String,
     items: Vec<Item>,
@@ -158,6 +160,45 @@ impl Space {
         self.spaces.push(space);
     }
 
+    /// Recursively search for a space and return a mutable reference if found.
+    pub fn find_space_mut<'a>(&'a mut self, name: &str) -> Option<&'a mut Space> {
+        if self.name == name {
+            return Some(self);
+        }
+        for space in &mut self.spaces {
+            if let Some(found) = space.find_space_mut(name) {
+                return Some(found);
+            }
+        }
+        None
+    }
+
+    /// Remove an item by name from this space or any child space.
+    pub fn remove_item(&mut self, name: &str) -> Option<Item> {
+        if let Some(pos) = self.items.iter().position(|i| i.name == name) {
+            return Some(self.items.remove(pos));
+        }
+        for space in &mut self.spaces {
+            if let Some(item) = space.remove_item(name) {
+                return Some(item);
+            }
+        }
+        None
+    }
+
+    /// Remove a child space by name and return it if found.
+    pub fn remove_space(&mut self, name: &str) -> Option<Space> {
+        if let Some(pos) = self.spaces.iter().position(|s| s.name == name) {
+            return Some(self.spaces.remove(pos));
+        }
+        for space in &mut self.spaces {
+            if let Some(found) = space.remove_space(name) {
+                return Some(found);
+            }
+        }
+        None
+    }
+
     pub fn find_space<'a>(&'a self, name: &str) -> Option<&'a Space> {
         if self.name == name {
             return Some(self);
@@ -168,6 +209,23 @@ impl Space {
             }
         }
         None
+    }
+
+    pub fn save_to_file<P: AsRef<std::path::Path>>(
+        &self,
+        path: P,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let json = serde_json::to_string_pretty(self)?;
+        std::fs::write(path, json)?;
+        Ok(())
+    }
+
+    pub fn from_file<P: AsRef<std::path::Path>>(
+        path: P,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        let data = std::fs::read_to_string(path)?;
+        let space = serde_json::from_str(&data)?;
+        Ok(space)
     }
 }
 
@@ -202,5 +260,30 @@ mod tests {
         assert_eq!(found.name(), "child");
         assert_eq!(found.items().len(), 1);
         assert_eq!(found.items()[0], item);
+    }
+
+    #[test]
+    fn save_and_load_space() {
+        let item = Item::builder()
+            .name("item1")
+            .description("desc")
+            .build();
+
+        let child = Space::builder()
+            .name("child")
+            .push_item(item.clone())
+            .build();
+
+        let root = Space::builder()
+            .name("root")
+            .root(true)
+            .push_space(child)
+            .build();
+
+        let file = tempfile::NamedTempFile::new().unwrap();
+        root.save_to_file(file.path()).unwrap();
+
+        let loaded = Space::from_file(file.path()).unwrap();
+        assert_eq!(loaded, root);
     }
 }
