@@ -160,6 +160,45 @@ impl Space {
         self.spaces.push(space);
     }
 
+    /// Recursively search for a space and return a mutable reference if found.
+    pub fn find_space_mut<'a>(&'a mut self, name: &str) -> Option<&'a mut Space> {
+        if self.name == name {
+            return Some(self);
+        }
+        for space in &mut self.spaces {
+            if let Some(found) = space.find_space_mut(name) {
+                return Some(found);
+            }
+        }
+        None
+    }
+
+    /// Remove an item by name from this space or any child space.
+    pub fn remove_item(&mut self, name: &str) -> Option<Item> {
+        if let Some(pos) = self.items.iter().position(|i| i.name == name) {
+            return Some(self.items.remove(pos));
+        }
+        for space in &mut self.spaces {
+            if let Some(item) = space.remove_item(name) {
+                return Some(item);
+            }
+        }
+        None
+    }
+
+    /// Remove a child space by name and return it if found.
+    pub fn remove_space(&mut self, name: &str) -> Option<Space> {
+        if let Some(pos) = self.spaces.iter().position(|s| s.name == name) {
+            return Some(self.spaces.remove(pos));
+        }
+        for space in &mut self.spaces {
+            if let Some(found) = space.remove_space(name) {
+                return Some(found);
+            }
+        }
+        None
+    }
+
     pub fn find_space<'a>(&'a self, name: &str) -> Option<&'a Space> {
         if self.name == name {
             return Some(self);
